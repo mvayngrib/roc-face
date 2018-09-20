@@ -23,11 +23,12 @@ import "C"
 
 // InvalidSimilarity value for similarity when verification failed for some reason
 const InvalidSimilarity = -1.0
+const _32M = (1 << 20) * 32
 
 type verificationResult struct {
-	Similarity C.roc_similarity `json:"similarity"`
-	Code       string           `json:"code"`
-	Message    string           `json:"message"`
+	Similarity C.roc_similarity `json:"similarity,omitempty"`
+	Code       string           `json:"code,omitempty"`
+	Message    string           `json:"message,omitempty"`
 }
 
 func deleteFiles(filePaths []string) {
@@ -53,31 +54,28 @@ func main() {
 	}
 
 	// init SDK
+	log.Println("inializing sdk")
 	C.roc_ensure(C.roc_initialize(nil, nil))
+	log.Println("inialized sdk")
+
+	// if len(os.Args) > 2 {
+	// 	var filePaths = [2]string{os.Args[2], os.Args[3]}
+	// 	log.Println("Checking image paths", filePaths)
+	// 	var result = verify(filePaths)
+	// 	if result.Similarity == InvalidSimilarity {
+	// 		log.Panic(result.Message)
+	// 	} else {
+	// 		log.Println("result:", result)
+	// 	}
+	// }
 
 	r := mux.NewRouter()
-	r.Methods("POST")
 	r.Schemes("http")
-	r.HandleFunc("/verify", verifyHandler)
+	r.HandleFunc("/verify", verifyHandler).Methods("POST")
 
-	// http.Handle("/", r)
-	http.ListenAndServe(fmt.Sprintf("localhost:%d", port), r)
-
-	// for testing
-	if len(os.Args) > 2 {
-		log.Println("Checking image path", os.Args[1], os.Args[2])
-		filePaths := [2]string{
-			os.Args[1],
-			os.Args[2],
-		}
-
-		var result = verify(filePaths)
-		if result.Similarity == InvalidSimilarity {
-			log.Panic(result.Message)
-		} else {
-			log.Println("result:", result)
-		}
-	}
+	var host = fmt.Sprintf("localhost:%d", port)
+	log.Printf("running server on: %s", host)
+	http.Handle("/", r)
 
 	// wait for close
 	defer func() {
@@ -85,9 +83,18 @@ func main() {
 		// cleanup SDK
 		C.roc_ensure(C.roc_finalize())
 	}()
+
+	err = http.ListenAndServe(host, r)
+	log.Println("the serveri is dead")
+	if err != nil {
+		os.Exit(1)
+	} else {
+		os.Exit(0)
+	}
 }
 
 func verifyHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("/verify")
 	var filePaths, err = saveImagesFromRequest(r)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -99,44 +106,59 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var result = verify(filePaths)
+	deleteFiles(filePaths[:])
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(result)
 }
 
 func genTmpPath() string {
-	return "./tmp/" + strconv.Itoa(rand.Int())
+	var tmpPath = "/tmp/roc-face-" + strconv.Itoa(rand.Int())
+	log.Println("generated tmp path", tmpPath)
+	return tmpPath
 }
 
 func saveImagesFromRequest(r *http.Request) ([2]string, error) {
-	//ParseMultipartForm parses a request body as multipart/form-data
-	r.ParseMultipartForm(32 << 20)
+	var err error
 
+	//ParseMultipartForm parses a request body as multipart/form-data
+	r.ParseMultipartForm(_32M) // max 16MB images
+
+	log.Println("extracting images from request")
 	formFields := [2]string{"image1", "image2"}
 	var filePaths [2]string
 	var formImages [2]multipart.File
 
 	for index, field := range formFields {
+		log.Println("extracting field", field)
 		image, _, err := r.FormFile(field)
-		defer image.Close() //close the file when we finish
 		if err != nil {
+			log.Println("failed to extract field:", field, "error:", err.Error())
 			return filePaths, err
 		}
 
+		defer image.Close() //close the file when we finish
 		formImages[index] = image
 	}
 
+	log.Println("saving images to disk")
 	for index, image := range formImages {
 		var imagePath = genTmpPath()
-		file, err := os.OpenFile(imagePath, os.O_WRONLY|os.O_CREATE, 0666)
+		var outfile *os.File
+		outfile, err = os.Create(imagePath)
 		if err != nil {
 			return filePaths, err
 		}
 
-		log.Printf("wrote file: %s", imagePath)
+		_, err = io.Copy(outfile, image)
+		if err != nil {
+			return filePaths, err
+		}
+
 		filePaths[index] = imagePath
-		defer file.Close()
-		io.Copy(file, image)
+		defer outfile.Close()
+		io.Copy(outfile, image)
+		log.Printf("wrote file: %s", imagePath)
 	}
 
 	return filePaths, nil
@@ -150,6 +172,8 @@ func verify(filePaths [2]string) verificationResult {
 	// 		Message:    "expected two image paths",
 	// 	}
 	// }
+
+	log.Println("verify()")
 
 	// Open both images
 	var images [2]C.roc_image
@@ -186,7 +210,6 @@ func verify(filePaths [2]string) verificationResult {
 		C.roc_ensure(C.roc_free_image(images[i]))
 	}
 
-	deleteFiles(filePaths[:])
 	return verificationResult{
 		Similarity: similarity,
 	}
