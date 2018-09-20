@@ -26,9 +26,9 @@ const InvalidSimilarity = -1.0
 const _32M = (1 << 20) * 32
 
 type verificationResult struct {
-	Similarity C.roc_similarity `json:"similarity,omitempty"`
-	Code       string           `json:"code,omitempty"`
-	Message    string           `json:"message,omitempty"`
+	Similarity float32 `json:"similarity,omitempty"`
+	Code       string  `json:"code,omitempty"`
+	Message    string  `json:"message,omitempty"`
 }
 
 func deleteFiles(filePaths []string) {
@@ -211,6 +211,6 @@ func verify(filePaths [2]string) verificationResult {
 	}
 
 	return verificationResult{
-		Similarity: similarity,
+		Similarity: float32(similarity),
 	}
 }
