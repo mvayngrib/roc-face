@@ -17,10 +17,6 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// #cgo LDFLAGS: -lroc
-// #include <roc.h>
-import "C"
-
 // InvalidSimilarity value for similarity when verification failed for some reason
 const InvalidSimilarity = -1.0
 const _32M = (1 << 20) * 32
@@ -46,32 +42,21 @@ func main() {
 	var port int
 	var err error
 	if len(os.Args) < 2 {
-		C.roc_ensure(C.CString("Expected one argument: port"))
+		log.Fatal("Expected one argument: port")
 	}
 
 	if port, err = strconv.Atoi(os.Args[1]); err != nil {
-		C.roc_ensure(C.CString("Expected port to be a number"))
+		log.Fatal("Expected port to be a number")
 	}
 
 	// init SDK
 	log.Println("inializing sdk")
-	C.roc_ensure(C.roc_initialize(nil, nil))
 	log.Println("inialized sdk")
-
-	// if len(os.Args) > 2 {
-	// 	var filePaths = [2]string{os.Args[2], os.Args[3]}
-	// 	log.Println("Checking image paths", filePaths)
-	// 	var result = verify(filePaths)
-	// 	if result.Similarity == InvalidSimilarity {
-	// 		log.Panic(result.Message)
-	// 	} else {
-	// 		log.Println("result:", result)
-	// 	}
-	// }
 
 	r := mux.NewRouter()
 	r.Schemes("http")
 	r.HandleFunc("/verify", verifyHandler).Methods("POST")
+	r.HandleFunc("/ping", pingHandler).Methods("GET", "POST")
 
 	var host = fmt.Sprintf("0.0.0.0:%d", port)
 	log.Printf("running server on: %s", host)
@@ -81,7 +66,6 @@ func main() {
 	defer func() {
 		log.Println("cleanup")
 		// cleanup SDK
-		C.roc_ensure(C.roc_finalize())
 	}()
 
 	err = http.ListenAndServe(host, r)
@@ -93,12 +77,15 @@ func main() {
 	}
 }
 
+func pingHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("/ping")
+	w.WriteHeader(http.StatusOK)
+}
+
 func verifyHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("/verify")
 	var filePaths, err = saveImagesFromRequest(r)
 	if err != nil {
-		// TODO: in case one image was succcessfully extracted, delete it
-
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(errorResponseObj{
 			Message: err.Error(),
@@ -107,7 +94,10 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var result = verify(filePaths)
+	var result = verificationResult{
+		Similarity: rand.Float32(),
+	}
+
 	deleteFiles(filePaths[:])
 
 	w.WriteHeader(http.StatusOK)
@@ -164,55 +154,4 @@ func saveImagesFromRequest(r *http.Request) ([2]string, error) {
 	}
 
 	return filePaths, nil
-}
-
-func verify(filePaths [2]string) verificationResult {
-	// if len(filePaths) != 2 {
-	// 	return verificationResult{
-	// 		Similarity: InvalidSimilarity,
-	// 		Code:       "InvalidImageCount",
-	// 		Message:    "expected two image paths",
-	// 	}
-	// }
-
-	log.Println("verify()")
-
-	// Open both images
-	var images [2]C.roc_image
-	for i := 0; i < 2; i++ {
-		log.Println("Checking image path", filePaths[i])
-		C.roc_ensure(C.roc_read_image(C.CString(filePaths[i]), C.ROC_GRAY8, &images[i]))
-	}
-
-	// Find and represent one face in each image
-	var templates [2]C.roc_template
-	for i := 0; i < 2; i++ {
-		var adaptiveMinimumSize C.size_t
-		C.roc_ensure(C.roc_adaptive_minimum_size(images[i], 0.08, 36, &adaptiveMinimumSize))
-		C.roc_ensure(C.roc_represent(images[i], C.ROC_FRONTAL|C.ROC_FR, adaptiveMinimumSize, 1, 0.02, &templates[i]))
-		if templates[i].algorithm_id&C.ROC_INVALID != 0 {
-			var message = fmt.Sprintf("Failed to detect face in image %d", i)
-			log.Println(message)
-			return verificationResult{
-				Similarity: InvalidSimilarity,
-				Code:       "FaceNotDetected",
-				Message:    message,
-			}
-		}
-	}
-
-	// Compare faces
-	var similarity C.roc_similarity
-	C.roc_ensure(C.roc_compare_templates(templates[0], templates[1], &similarity))
-	log.Println("Similarity:", similarity)
-
-	// Cleanup
-	for i := 0; i < 2; i++ {
-		C.roc_ensure(C.roc_free_template(&templates[i]))
-		C.roc_ensure(C.roc_free_image(images[i]))
-	}
-
-	return verificationResult{
-		Similarity: float32(similarity),
-	}
 }
