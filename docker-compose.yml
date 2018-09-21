@@ -1,0 +1,7 @@
+version: '3'
+services:
+  roc:
+    image: tradle/roc-face
+    network_mode: host
+    ports:
+      - 8080:8080
