@@ -113,6 +113,7 @@ func main() {
 	r.Schemes("http")
 	r.HandleFunc("/verify", verifyHandler).Methods("POST")
 	r.HandleFunc("/analyze", analyzeHandler).Methods("POST")
+	r.HandleFunc("/ping", pingHandler).Methods("GET", "POST")
 
 	var host = fmt.Sprintf("0.0.0.0:%d", port)
 	log.Printf("running server on: %s", host)
@@ -199,6 +200,11 @@ func getFloatQueryParam(r *http.Request, param string, defaultValue float32) (fl
 	}
 
 	return defaultValue, nil
+}
+
+func pingHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("/ping")
+	w.WriteHeader(http.StatusOK)
 }
 
 func verifyHandler(w http.ResponseWriter, r *http.Request) {
