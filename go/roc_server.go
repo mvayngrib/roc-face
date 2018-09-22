@@ -23,7 +23,7 @@ import "C"
 
 // InvalidSimilarity value for similarity when verification failed for some reason
 const InvalidSimilarity = -1.0
-const _32M = (1 << 20) * 32
+const _128M = (1 << 20) * 128
 const defaultFDR = 0.02
 const defaultMinFaceWidthInPixels = 36
 const defaultNumFacesToDetect = 1
@@ -238,7 +238,7 @@ func saveImagesFromRequest(r *http.Request, formFields []string) ([]string, erro
 	var err error
 
 	//ParseMultipartForm parses a request body as multipart/form-data
-	r.ParseMultipartForm(_32M) // max 16MB images
+	r.ParseMultipartForm(_128M) // max 128MB of data (might be needed later for video)
 
 	log.Println("extracting images from request")
 	var filePaths = make([]string, len(formFields))
