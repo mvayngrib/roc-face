@@ -32,7 +32,7 @@ var verifyFormFields = []string{"image1", "image2"}
 var analyzeFormFields = []string{"image"}
 
 type verificationResult struct {
-	Similarity float32 `json:"similarity,omitempty"`
+	Similarity float32 `json:"similarity"`
 	Code       string  `json:"code,omitempty"`
 	Message    string  `json:"message,omitempty"`
 }
