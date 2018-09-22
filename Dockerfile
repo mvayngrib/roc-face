@@ -19,4 +19,4 @@ ENV CGO_LDFLAGS=-L/go/src/app/lib
 
 EXPOSE 8080
 
-CMD ["go", "run", "-v", "roc_server.go", "8080"]
+CMD ["go", "run", "-v", "roc_server.go", "serve", "8080"]
