@@ -38,9 +38,11 @@ type verificationResult struct {
 }
 
 type analysisResult struct {
-	Code     string      `json:"code,omitempty"`
-	Message  string      `json:"message,omitempty"`
-	Analysis interface{} `json:"analysis,omitempty"`
+	Code                 string      `json:"code,omitempty"`
+	Message              string      `json:"message,omitempty"`
+	FDR                  float32     `json:"fdr,omitempty"`
+	MinFaceWidthInPixels int         `json:"minFaceWidthInPixels,omitempty"`
+	Analysis             interface{} `json:"analysis,omitempty"`
 }
 
 func deleteFiles(filePaths []string) {
@@ -341,7 +343,9 @@ func analyze(filePath string, fdr float32, minFaceWidthInPixels int, numFacesToD
 	C.roc_ensure(C.roc_free_image(image))
 
 	return analysisResult{
-		Analysis: data,
+		FDR:                  fdr,
+		MinFaceWidthInPixels: minFaceWidthInPixels,
+		Analysis:             data,
 	}
 }
 
